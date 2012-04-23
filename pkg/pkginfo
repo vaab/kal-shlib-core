@@ -4,7 +4,7 @@
 #
 
 pkg_name="kal-shlib-core"
-pkg_version="0.3.0"
+pkg_version="%%version%%"
 pkg_maturity="alpha"
 
 . pkg/author

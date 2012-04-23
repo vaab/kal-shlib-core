@@ -1,6 +1,2 @@
 
-
-
-
-licence_date=$(date +%Y)
-
+licence_date=%%year%%
