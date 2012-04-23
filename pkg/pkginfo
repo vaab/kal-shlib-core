@@ -1,0 +1,13 @@
+
+#
+# Used by scripts (configure.in) to propagate version info...
+#
+
+pkg_name="kal-shlib-core"
+pkg_version="0.3.0"
+pkg_maturity="alpha"
+
+. pkg/author
+
+pkg_bug_report_email="$author_email"
+

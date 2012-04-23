@@ -1,0 +1,295 @@
+#!/bin/bash
+# Begin shlib
+
+## THIS IS THE SHLIB LOADER, AND THUS DOESN'T RELY ON SHELL LIBS
+
+## TODO : could process some comment directive to include live GPL statement
+##  or copyrights statements, or even some authors statements.
+
+## depends on: grep, head, file, test, cat, sed
+
+
+## VARS
+
+tmp_dir=/tmp
+
+## XXXVaab : detection at 'make' time was deactivated.
+# etc_location=%%sysconfdir%%/shlib
+etc_location=/etc/shlib
+
+## CODE
+
+exname=$(basename $0)
+
+usage="usage:
+  $exname
+  $exname {script-name}
+  $exname d {script-name}
+  $exname s {script-name}
+  $exname get {var-name}"
+
+[ "$SHLIB" != "" ] || SHLIB="$etc_location"
+
+if [ "$#" = "0" ]; then
+    if ! [ -f "$etc_location" -a -r "$etc_location" ]; then
+	echo "$exname: can't access config file '$etc_location'.";
+	exit 1;
+    fi
+
+    cat "$etc_location"
+    exit 0
+fi
+
+
+if ! file --help >/dev/null 2>&1 ; then
+    echo "$exname: can't find the 'file' executable.";
+    exit 1;
+fi
+
+if test -z "$1"; then
+    echo "$usage"
+    exit 1;
+fi
+
+if test "$#" -gt 2; then
+    echo $usage
+    exit 1;
+fi
+
+if test "$#" = 2; then
+
+    if [ "$1" != "d" ] && [ "$1" != "s" ] && [ "$1" != "get" ] ;then
+	echo "Bad first argument, must be 'd' or 's' or 'get'."
+	echo $usage
+	exit 1;
+    fi
+
+    if [ "$1" == "get" ]; then
+	for i in SHLIB;do
+	    if [ "$i" == "$2" ]; then
+		eval echo \$$i
+		exit 0;
+	    fi
+	done
+	echo "Bad var name '$2'" >&2
+	exit 1;
+    fi
+
+    mode="$1"
+    query="no"
+    shift
+else
+    query="yes"
+fi
+
+if ! test -f "$1"; then
+    echo "$exname: file '$1' not found."
+    exit 1;
+fi
+
+if ! test -x "$1"; then
+    echo "$exname: file '$1' not an executable."
+    exit 1;
+fi
+
+if ! test -x "$1"; then
+    echo "$exname: file '$1' not an executable."
+    exit 1;
+fi
+
+if ! file -b "$1" | grep "text" >/dev/null; then
+    echo "$exname: file '$1' is binary."
+    exit 1;
+fi
+
+if ! head -n 1 "$1" | grep '^#!' >/dev/null; then
+    echo "$exname: file '$1' doesn't seem to be a script."
+    exit 1;
+fi
+
+begin=$(head -n 1 "$1")
+
+if ! cat "$1" | grep '^#\!- ' -m 1 >/dev/null; then
+    echo "$exname: file '$1' doesn't seem to contain loader call."
+    exit 1;
+fi
+
+content="$(cat "$1")"
+
+end=$(echo "$content" | tail -n +2)
+
+line2=$(echo "$end" | cat -n | tr '\t' ':' | grep -E '^ *[0-9]+:#!- ' -m 1 | cut -f 1 -d ":" )
+line2=$(echo $line2)
+
+line2=$[$line2 - 1]
+
+# TODO : There's a BUG in 'head' implementation that supress trailing new lines
+between=$(echo "$end" | head -n "$line2")
+
+
+
+code=$(echo "$between" | sed 's/\#.*$//g' \
+                       | sed 's/^ *//g' \
+                       | sed 's/ *$//g' \
+                       | grep -v "^$" )
+
+
+if test "$code"; then
+    echo "$exname: Code found before '#!- ' statement."
+    exit 1;
+fi
+
+line2=$[$line2 + 1]
+separator=$(echo "$end" | tail -n "+$line2" | head -n 1)
+
+begin=$(echo -e "$begin\n$between\n\n$separator")
+
+line2=$[$line2 + 1]
+end=$(echo "$end" | tail -n "+$line2")
+
+if ! echo "$end" | grep '^#!- ' -m 1 >/dev/null; then
+    echo "$exname: file '$1' doesn't contain a closing '#!- ' loader call."
+    exit 1;
+fi
+
+line3=$(echo "$end" | cat -n | tr '\t' ':' | grep -E '^ *[0-9]+:#!- ' -m 1 | cut -f 1 -d ":" )
+line3=$(echo $line3)
+
+line3=$[$line3 - 1]
+
+between=$(echo "$end" | head -n "$line3")
+line3=$[$line3 + 1]
+end=$(echo "$end" | tail -n "+$line3")
+
+if test "$query" = "yes" ; then
+    echo "$between";
+    exit 0;
+fi
+
+if ! test -d "$tmp_dir" ; then
+    echo "$exname: '$tmp_dir' can't be accessed.";
+    exit 1;
+fi
+
+pid="$$"
+tmp_file="$tmp_dir/$pid.tmp"
+
+if ! cp "$1" "$tmp_file"; then
+    echo "$exname: copy to '$tmp_file' failed.";
+    exit 1;
+fi
+
+if test "$mode" = "d"; then
+    code=". $(shlib get SHLIB)"
+    (echo "$begin" ; echo "$code"; echo "$end") > $tmp_file
+    mv "$tmp_file" "$1"
+    exit 0;
+fi
+
+# STATIC MODE : we must implement an 'include' function...
+
+# gathering the list of 'include' calls.
+
+# CANNOT BE SURE OF FINDING ALL THE INCLUDE CALLS
+
+function get_incs()
+{
+    echo "$1" | grep -E "\<include\> +\<\w+\>"  \
+    | sed 's/.*include \+\(\w\+\)/\1/g' \
+    | sort \
+    | uniq
+};
+
+incs=$(get_incs "$end")
+
+if ! test "$SHLIB"; then
+    echo "$exname: 'SHLIB' var is not set"
+fi
+
+if ! test -r "$SHLIB"; then
+    echo "$exname: couldn't read '$SHLIB'."
+    exit 1
+fi
+
+
+# This file MUST set the SHLIB_PATH
+. $SHLIB
+
+if ! test "$SHLIB_PATH"; then
+    echo "$exname: '$SHLIB' did not set SHLIB_PATH variable."
+fi
+if ! test "$SHLIB_PREFIX"; then
+    echo "$exname: '$SHLIB' did not set SHLIB_PREFIX variable."
+fi
+
+if ! test "$SHLIB_SUFFIX"; then
+    echo "$exname: '$SHLIB' did not set SHLIB_SUFFIX variable."
+fi
+
+# function generate_sep()
+# {
+#     sep="EOF"
+#     while echo "$1" | grep $sep >/dev/null
+#     do
+#       sep="${sep}x"
+#     done
+#     echo $sep
+# };
+
+done_inc=""
+
+while test "$incs"; do
+    i=$(echo "$incs" | head -n 1)
+    incs=$(echo "$incs" | tail -n +2)
+    done_inc=$(echo -e "$i\n$done_inc")
+
+    filename="$SHLIB_PATH/$SHLIB_PREFIX$i$SHLIB_SUFFIX"
+
+    if ! test -f "$filename" -a -r "$filename"
+    then
+        echo "$exname: error: file '$filename' cannot be open for read."
+        exit 1;
+    fi
+
+    insert_gz="$(cat "$filename")"
+
+    # Add new include to tail of list
+    for j in $(get_incs "$insert_gz");do
+	echo "$done_inc" | grep $j >/dev/null && continue # already done
+	echo "$incs" | grep $j >/dev/null && continue # already in tail
+	incs="$(echo -e "$j\n$incs")" # append to tail
+	#echo "added '$j'" >&2
+    done
+
+    code=$(echo -e "$code\n\n\"$i\")\n\n$insert_gz\n\n;;\n")
+
+
+done
+
+code="function include() {
+
+while test \"\$1\"; do
+
+case \"\$1\" in
+$code
+*)
+   echo \"\$FUNCNAME: '\$1' not found.\"
+   exit 1;;
+esac
+
+shift;
+done
+
+}
+"
+
+
+echo "$begin
+$code
+$end" > $tmp_file
+mv "$tmp_file" "$1"
+exit 0;
+
+
+
+# End shlib
