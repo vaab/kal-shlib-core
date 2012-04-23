@@ -171,6 +171,10 @@ if [ -f configure.ac -o -f configure.in ]; then
         exit 1
     fi
 
+    if ! [ -f README ] && [ -f README.rst ]; then
+        cp README.rst README
+    fi
+
     touch NEWS AUTHORS ChangeLog
 
     autoreconf
