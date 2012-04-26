@@ -86,8 +86,8 @@ you should include this repository to your apt system and then::
   # apt-get update && apt-get install kal-shlib-core
 
 
-What does contain this package ?
---------------------------------
+What do this package contains ?
+-------------------------------
 
 - directory ``$prefix/lib/shlib/`` where library will be loaded
 - an executable ``shlib`` installed in $prefix/bin
