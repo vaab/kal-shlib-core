@@ -1,23 +1,21 @@
 #!/bin/bash
 # Begin shlib
 
-## THIS IS THE SHLIB LOADER, AND THUS DOESN'T RELY ON SHELL LIBS
+## Shell lib linker
+##
+## Manage insertion of code in your shell script to include kal-shlib-* code.
+##
 
-## TODO : could process some comment directive to include live GPL statement
-##  or copyrights statements, or even some authors statements.
-
-## depends on: grep, head, file, test, cat, sed
-
-
-## VARS
+##
+## Some variables
+##
 
 tmp_dir=/tmp
 
-## XXXVaab : detection at 'make' time was deactivated.
+## XXXVaab: detection at 'make' time was deactivated.
 # etc_location=%%sysconfdir%%/shlib
 etc_location=/etc/shlib
-
-## CODE
+[ "$SHLIB" != "" ] || SHLIB="$etc_location"
 
 exname=$(basename $0)
 
@@ -28,7 +26,10 @@ usage="usage:
   $exname s {script-name}
   $exname get {var-name}"
 
-[ "$SHLIB" != "" ] || SHLIB="$etc_location"
+
+##
+## Argument parsing
+##
 
 if [ "$#" = "0" ]; then
     if ! [ -f "$etc_location" -a -r "$etc_location" ]; then
@@ -39,7 +40,6 @@ if [ "$#" = "0" ]; then
     cat "$etc_location"
     exit 0
 fi
-
 
 if ! file --help >/dev/null 2>&1 ; then
     echo "$exname: can't find the 'file' executable.";
@@ -82,6 +82,10 @@ else
     query="yes"
 fi
 
+##
+## Checking sanity of arguments
+##
+
 if ! test -f "$1"; then
     echo "$exname: file '$1' not found."
     exit 1;
@@ -114,6 +118,10 @@ if ! cat "$1" | grep '^#\!- ' -m 1 >/dev/null; then
     exit 1;
 fi
 
+##
+## Let's do the dirty job
+##
+
 content="$(cat "$1")"
 
 end=$(echo "$content" | tail -n +2)
@@ -125,7 +133,6 @@ line2=$[$line2 - 1]
 
 # TODO : There's a BUG in 'head' implementation that supress trailing new lines
 between=$(echo "$end" | head -n "$line2")
-
 
 
 code=$(echo "$between" | sed 's/\#.*$//g' \
@@ -186,14 +193,14 @@ if test "$mode" = "d"; then
     exit 0;
 fi
 
-# STATIC MODE : we must implement an 'include' function...
 
-# gathering the list of 'include' calls.
+##
+## STATIC MODE
+##
 
-# CANNOT BE SURE OF FINDING ALL THE INCLUDE CALLS
-
-function get_incs()
-{
+## XXXvlab: Note that this way of looking for all ``include`` calls is far from
+## perfect
+function get_incs() {
     echo "$1" | grep -E "\<include\> +\<\w+\>"  \
     | sed 's/.*include \+\(\w\+\)/\1/g' \
     | sort \
@@ -212,7 +219,7 @@ if ! test -r "$SHLIB"; then
 fi
 
 
-# This file MUST set the SHLIB_PATH
+## By sourcing $SHLIB we are looking for the ``$SHLIB_PATH`` value.
 . $SHLIB
 
 if ! test "$SHLIB_PATH"; then
@@ -225,16 +232,6 @@ fi
 if ! test "$SHLIB_SUFFIX"; then
     echo "$exname: '$SHLIB' did not set SHLIB_SUFFIX variable."
 fi
-
-# function generate_sep()
-# {
-#     sep="EOF"
-#     while echo "$1" | grep $sep >/dev/null
-#     do
-#       sep="${sep}x"
-#     done
-#     echo $sep
-# };
 
 done_inc=""
 
@@ -263,7 +260,6 @@ while test "$incs"; do
 
     code=$(echo -e "$code\n\n\"$i\")\n\n$insert_gz\n\n;;\n")
 
-
 done
 
 code="function include() {
@@ -283,13 +279,10 @@ done
 }
 "
 
-
 echo "$begin
 $code
 $end" > $tmp_file
 mv "$tmp_file" "$1"
 exit 0;
-
-
 
 # End shlib

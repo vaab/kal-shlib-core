@@ -1,13 +1,13 @@
 #!/bin/bash
-# Begin shlib
+## Begin shlib
 
 SHLIB_PATH=${SHLIB_PATH:-"/usr/lib/shlib"}
 
 SHLIB_PREFIX=${SHLIB_PREFIX:-"lib"}
 SHLIB_SUFFIX=${SHLIB_SUFFIX:-".sh"}
 
-## XXXvlab: why did I remove detection of duplicate include ?
 function include() {
+
     usage="$FUNCNAME LIBALIAS [LIBALIAS ... ]"
 
     while [ "$1" ]; do
@@ -24,4 +24,4 @@ function include() {
     done
 }
 
-# End shlib
+## End shlib
