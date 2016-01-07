@@ -1,12 +1,13 @@
 #!/bin/bash
 ## Begin shlib
 
-SHLIB_PATH=${SHLIB_PATH:-"/usr/lib/shlib"}
+export SHLIB_PATH=${SHLIB_PATH:-"/usr/lib/shlib"}
 
-SHLIB_PREFIX=${SHLIB_PREFIX:-"lib"}
-SHLIB_SUFFIX=${SHLIB_SUFFIX:-".sh"}
+export SHLIB_PREFIX=${SHLIB_PREFIX:-"lib"}
+export SHLIB_SUFFIX=${SHLIB_SUFFIX:-".sh"}
 
 function include() {
+    local function_names filename usage
 
     usage="$FUNCNAME LIBALIAS [LIBALIAS ... ]"
 
@@ -18,10 +19,15 @@ function include() {
             echo "$FUNCNAME: error: file '$filename' cannot be open for read."
             exit 1
         fi
-
+        function_names=$(
+            for fun in $(egrep "^\s*[a-zA-Z_0-9-]+\s*\(\)\s*(\{\s*)?$" "$filename" | cut -f 1 -d "("); do
+                [ "$(type -t "$fun")" == "function" -a "$fun" != "function" ] && echo "$fun"
+            done)
         . "$filename"
+        [ "$function_names" ] && export -f $function_names
         shift
     done
 }
+export -f include
 
 ## End shlib
