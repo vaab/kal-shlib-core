@@ -6,6 +6,8 @@ export SHLIB_PATH=${SHLIB_PATH:-"/usr/lib/shlib"}
 export SHLIB_PREFIX=${SHLIB_PREFIX:-"lib"}
 export SHLIB_SUFFIX=${SHLIB_SUFFIX:-".sh"}
 
+declare -A _shlib_included
+
 function include() {
     local function_names filename usage
 
@@ -14,7 +16,7 @@ function include() {
     while [ "$1" ]; do
 
         filename="$SHLIB_PATH/$SHLIB_PREFIX$1$SHLIB_SUFFIX"
-
+        [[ ${_shlib_included["$filename"]} ]] && { shift; continue; }  ## already included
         if ! test -f "$filename" -a -r "$filename"; then
             echo "$FUNCNAME: error: file '$filename' cannot be open for read."
             exit 1
@@ -26,6 +28,7 @@ function include() {
             done)
         [ "$function_names" ] && export -f $function_names
         shift
+        _shlib_included["$filename"]=1
     done
 }
 export -f include
