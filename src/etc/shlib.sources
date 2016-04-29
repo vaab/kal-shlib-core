@@ -8,13 +8,13 @@ export SHLIB_SUFFIX=${SHLIB_SUFFIX:-".sh"}
 
 declare -A _shlib_included
 
-function include() {
+
+include() {
     local function_names filename usage
 
     usage="$FUNCNAME LIBALIAS [LIBALIAS ... ]"
 
     while [ "$1" ]; do
-
         filename="$SHLIB_PATH/$SHLIB_PREFIX$1$SHLIB_SUFFIX"
         [[ ${_shlib_included["$filename"]} ]] && { shift; continue; }  ## already included
         if ! test -f "$filename" -a -r "$filename"; then
@@ -23,7 +23,8 @@ function include() {
         fi
         . "$filename"
         function_names=$(
-            for fun in $(egrep "^\s*(function\s+)?[a-zA-Z_0-9-]+\s*\(\)\s*(\{\s*)?$" "$filename" | cut -f 1 -d "(" | sort -u); do
+            for fun in $(egrep "^\s*(function\s+)?[a-zA-Z_0-9-]+\s*\(\)\s*(\{\s*)?$" "$filename" |
+                                cut -f 1 -d "(" | sort -u); do
                 [ "$(type -t "$fun")" == "function" -a "$fun" != "function" ] && echo "$fun"
             done)
         [ "$function_names" ] && export -f $function_names
