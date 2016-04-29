@@ -22,12 +22,11 @@ include() {
             exit 1
         fi
         . "$filename"
-        function_names=$(
-            for fun in $(egrep "^\s*(function\s+)?[a-zA-Z_0-9-]+\s*\(\)\s*(\{\s*)?$" "$filename" |
-                                cut -f 1 -d "(" | sort -u); do
-                [ "$(type -t "$fun")" == "function" -a "$fun" != "function" ] && echo "$fun"
-            done)
-        [ "$function_names" ] && export -f $function_names
+        for fun in $(egrep "^\s*(function\s+)?[a-zA-Z_0-9-]+\s*\(\)\s*(\{\s*)?$" "$filename" |
+                            cut -f 1 -d "(" | sort -u); do
+            [ "$fun" == "function" ] && continue
+            export -f "$fun"
+        done
         shift
         _shlib_included["$filename"]=1
     done
