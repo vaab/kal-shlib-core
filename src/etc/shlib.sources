@@ -1,6 +1,8 @@
 #!/bin/bash
 ## Begin shlib
 
+[ "$_shlib_loaded" ] && return 0
+
 export SHLIB_PATH=${SHLIB_PATH:-"/usr/lib/shlib"}
 
 export SHLIB_PREFIX=${SHLIB_PREFIX:-"lib"}
@@ -55,5 +57,7 @@ autoload || {
     echo "Fatal: shlib: autoload failed." >&2
     exit 1
 }
+
+export _shlib_loaded=1
 
 ## End shlib
