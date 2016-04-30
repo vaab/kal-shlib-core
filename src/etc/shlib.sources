@@ -1,4 +1,3 @@
-#!/bin/bash
 ## Begin shlib
 
 [ "$_shlib_loaded" ] && return 0
