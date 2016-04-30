@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+source="$1"
+
+shift
+
+exec -a "$source" /bin/bash -s "$@"<<EOF
+
+if [ -e /etc/shlib ]; then
+     . /etc/shlib || {
+         echo "Unsatisfied dependency. Please install 'kal-shlib-core'." >&2
+         exit 1
+     }
+fi
+
+. "$source"
+
+EOF
