@@ -1,3 +1,4 @@
+# -*- mode: shell-script -*-
 ## Begin shlib
 
 [ "$_shlib_loaded" ] && return 0
@@ -16,16 +17,17 @@ export _shlib_included
 
 _shlib_load() {
     local filename="$1" fun
+    read _ fn _ < <(caller 0)
     [[ $_shlib_included == *"$NL$filename$NL"* ]] && return 0
     if ! test -f "$filename" -a -r "$filename"; then
-        echo "$FUNCNAME: error: file '$filename' cannot be open for read." >&2
+        echo "$fn: error: file '$filename' cannot be open for read." >&2
         exit 1
     fi
     . "$filename" || {
-        echo "$FUNCNAME: error: file '$filename' failed while sourcing." >&2
+        echo "$fn: error: file '$filename' failed while sourcing." >&2
         return 1
     }
-    for fun in $(egrep "^\s*(function\s+)?[a-zA-Z_0-9-]+\s*\(\)\s*(\{\s*)?$" "$filename" |
+    for fun in $(egrep "^\s*(function\s+)?[a-zA-Z_0-9-]+\s*\(\s*\)\s*(\{.*)?$" "$filename" |
                         cut -f 1 -d "(" | sort -u); do
         [ "$fun" == "function" ] && continue
         export -f "$fun"
