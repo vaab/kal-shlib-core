@@ -1,0 +1,6 @@
+NAME="kal-shlib-core"
+DESCRIPTION="Kalysto Shell Library core"
+EMAIL="valentin.lab@kalysto.org"
+AUTHOR="Valentin Lab"
+AUTHOR_EMAIL="$AUTHOR <$EMAIL>"
+
