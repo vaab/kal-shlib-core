@@ -270,6 +270,8 @@ swallow_last_time() {
     ((total+=nb_assert))
     sum_time=${sum_time:-0}
     test_counter=${test_counter:-0}
+    ((++test_counter))
+
     [ -e "$tmp_profile" ] || return 0
     load_profile __profile "$tmp_profile" || exit 1
     if [ "$sum_time" == "0" -a -z "$cmd" ]; then  ## catches first empty 'try'
@@ -343,7 +345,6 @@ swallow_last_time() {
         value="$(calc 3 "${__profile[time.real]} / 1000000")"
         printf "$UP$TEST_LINE_TEMPLATE$TEST_LINE_END_S" "$test_name" "$nb_assert_string" "$value"
     fi
-    ((++test_counter))
 }
 
 
@@ -531,9 +532,17 @@ if [ "$PROFILE" ]; then
     try ''
 fi
 
+if [ -z "${pos_args[*]}" ]; then
+    pos_args=(*)
+fi
 
 for test_file in "${pos_args[@]}"; do
-    source "./$test_file"
+    cd "$base/test"
+    [ -e "${test_file}" ] || continue
+    [ -x "${test_file}" ] && continue
+    test_counter=0
+    source "./${test_file}"
+    swallow_last_time
 done
 
 summary
