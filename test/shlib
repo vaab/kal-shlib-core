@@ -219,3 +219,84 @@ declare -fx bar1
 declare -fx bar2
 "
 
+
+##
+## include error message
+##
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+include xxx
+EOF
+    chmod +x foo
+}
+
+try "./foo"
+is errlvl 1
+is err reg "^foo: error: file '/tmp/tmp.*/test1/libxxx.sh' cannot be open for read.$"
+is out ""
+
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+x() {
+    include xxx
+}
+x
+EOF
+    chmod +x foo
+}
+
+try "./foo"
+is errlvl 1
+is err reg "^x: error: file '/tmp/tmp.*/test1/libxxx.sh' cannot be open for read.$"
+is out ""
+
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > foo
+#!/bin/bash
+
+. $base/src/etc/shlib.sources
+
+x() {
+    include xxx
+}
+x
+EOF
+    chmod +x foo
+}
+
+try "./foo"
+is errlvl 1
+is err reg "x: error: file '/tmp/tmp.*/test1/libxxx.sh' cannot be open for read.$"
+is out ""
+
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > foo
+#!/bin/bash
+
+. $base/src/etc/shlib.sources
+
+include xxx
+EOF
+    chmod +x foo
+}
+
+try "./foo"
+is errlvl 1
+is err reg "^foo: error: file '/tmp/tmp.*/test1/libxxx.sh' cannot be open for read.$"
+is out ""

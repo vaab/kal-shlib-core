@@ -1,6 +1,7 @@
 # -*- mode: shell-script -*-
 ## Begin shlib
 
+_shlib_caller="$0"
 [ "$_shlib_loaded" ] && return 0
 
 export SHLIB_PATH=${SHLIB_PATH:-"/usr/lib/shlib"}
@@ -15,16 +16,24 @@ _shlib_included=${_shlib_included:-$NL}
 export _shlib_included
 
 
+_get_caller() {
+    local fn sourced
+    read _ fn sourced < <(caller 2)
+    [ "$fn" == "source" -o "$fn" == "main" ] && fn=$(basename "$sourced")
+    [ "$fn" ] || fn=$(basename "$_shlib_caller")
+    echo "$fn"
+}
+
+
 _shlib_load() {
     local filename="$1" fun
-    read _ fn _ < <(caller 0)
     [[ $_shlib_included == *"$NL$filename$NL"* ]] && return 0
-    if ! test -f "$filename" -a -r "$filename"; then
-        echo "$fn: error: file '$filename' cannot be open for read." >&2
+    if ! [ -f "$filename" -a -r "$filename" ]; then
+        echo "$(_get_caller): error: file '$filename' cannot be open for read." >&2
         exit 1
     fi
     . "$filename" || {
-        echo "$fn: error: file '$filename' failed while sourcing." >&2
+        echo "$(_get_caller): error: file '$filename' failed while sourcing." >&2
         return 1
     }
     for fun in $(egrep "^\s*(function\s+)?[a-zA-Z_0-9-]+\s*\(\s*\)\s*(\{.*)?$" "$filename" |
