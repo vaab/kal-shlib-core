@@ -538,7 +538,10 @@ fi
 
 for test_file in "${pos_args[@]}"; do
     cd "$base/test"
-    [ -e "${test_file}" ] || continue
+    if ! [ -e "${test_file}" ]; then
+        echo "${RED}Error$NORMAL: No test file named '${test_file}'." >&2
+        exit 1
+    fi
     [ -x "${test_file}" ] && continue
     test_counter=0
     source "./${test_file}"
