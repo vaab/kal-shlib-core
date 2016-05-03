@@ -1,0 +1,185 @@
+
+prefix_cmd=""
+export _shlib_loaded=
+export _shlib_included=
+
+teardown() { cd "$test_tmpdir"; rm -rf test1; }
+
+export SHLIB_PATH=$test_tmpdir/test1
+
+
+##
+## include/autoload exporting function automatically
+##
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > libxxx.sh
+echo loading
+bar0() { echo bar; }
+bar1() {
+echo bar; }
+function bar2() { :; }
+  function   bar3 ( )    { # comment
+:; }
+bar4()
+{ :; }
+EOF
+    mkdir -p autoload
+    cat <<EOF > autoload/foo.sh
+bar5() { :; }
+EOF
+    cat <<EOF > foo2
+#!/bin/bash
+
+declare -F | grep 'bar[0-9]*\$'
+
+EOF
+
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+include xxx
+
+./foo2
+EOF
+    chmod +x foo foo2
+}
+
+try "./foo"
+noerror
+is out "loading
+declare -fx bar0
+declare -fx bar1
+declare -fx bar2
+declare -fx bar3
+declare -fx bar4
+declare -fx bar5
+"
+
+
+##
+## include and autoload non importing code twice
+##
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > libxxx.sh
+echo loading libxxx.sh
+bar1() { echo bar; }
+EOF
+    mkdir -p autoload
+    cat <<EOF > autoload/foo.sh
+echo loading autoload/foo.sh
+bar2() { :; }
+EOF
+    cat <<EOF > foo2
+#!$base/src/bin/bash-shlib
+
+include xxx
+
+declare -F | grep 'bar[0-9]*\$'
+
+EOF
+
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+include xxx
+include xxx
+
+./foo2
+EOF
+    chmod +x foo foo2
+}
+try "./foo"
+noerror
+is out "loading autoload/foo.sh
+loading libxxx.sh
+declare -fx bar1
+declare -fx bar2
+"
+
+
+##
+## include error message
+##
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+include xxx
+EOF
+    chmod +x foo
+}
+
+try "./foo"
+is errlvl 1
+is err reg "^foo: error: file '/tmp/tmp.*/test1/libxxx.sh' cannot be open for read.$"
+is out ""
+
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+x() {
+    include xxx
+}
+x
+EOF
+    chmod +x foo
+}
+
+try "./foo"
+is errlvl 1
+is err reg "^x: error: file '/tmp/tmp.*/test1/libxxx.sh' cannot be open for read.$"
+is out ""
+
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > foo
+#!/bin/bash
+
+. $base/src/etc/shlib.sources
+
+x() {
+    include xxx
+}
+x
+EOF
+    chmod +x foo
+}
+
+try "./foo"
+is errlvl 1
+is err reg "x: error: file '/tmp/tmp.*/test1/libxxx.sh' cannot be open for read.$"
+is out ""
+
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > foo
+#!/bin/bash
+
+. $base/src/etc/shlib.sources
+
+include xxx
+EOF
+    chmod +x foo
+}
+
+try "./foo"
+is errlvl 1
+is err reg "^foo: error: file '/tmp/tmp.*/test1/libxxx.sh' cannot be open for read.$"
+is out ""
