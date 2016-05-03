@@ -375,9 +375,9 @@ try() {
     desc=$cmd
     if [ "$cmd" ]; then
         if [ "$PROFILE" ]; then
-            test_name=${exname}_$({ echo "$cmd"; declare -f setup 2>&1 ; cat "$base/test/$exname"; } | md5sum | cut -c -16)
+            test_name=${test_file}_$({ echo "$cmd"; declare -f setup 2>&1 ; cat "$base/test/$exname"; } | md5sum | cut -c -16)
         else
-            test_name=${exname}_${test_counter}
+            test_name=${test_file}_${test_counter}
         fi
         printf "$TEST_LINE_TEMPLATE\n" "$test_name" "running test"
     fi
@@ -532,6 +532,8 @@ if [ "$PROFILE" ]; then
 fi
 
 
-for arg in "${pos_args[@]}"; do
-    source "./$arg"
+for test_file in "${pos_args[@]}"; do
+    source "./$test_file"
 done
+
+summary

@@ -219,4 +219,3 @@ declare -fx bar1
 declare -fx bar2
 "
 
-summary
