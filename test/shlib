@@ -103,17 +103,24 @@ EOF
 
 echo a
 include xxx
-echo b
+echo args: "\$@"
 EOF
     chmod +x foo
 }
 
 
-try "./foo"
+try "./foo a b"
 noerror
 is out "a
 foo
-b
+args: a b
+"
+
+try "./foo -d"
+noerror
+is out "a
+foo
+args: -d
 "
 
 

@@ -4,7 +4,7 @@ source="$1"
 
 shift
 
-exec -a "$source" /bin/bash -s "$@"<<EOF
+exec -a "$source" /bin/bash -s -- "$@" <<EOF
 
 if [ -e /etc/shlib ]; then
      . /etc/shlib || {
