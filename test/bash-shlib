@@ -42,3 +42,49 @@ is out "a
 foo
 args: -d
 "
+
+
+##
+## bash-shlib doesn't break stty
+##
+
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+stty size
+EOF
+    chmod +x foo
+}
+
+
+try "./foo"
+noerror
+
+
+##
+## $0 is preserved
+##
+
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+echo "\$0"
+EOF
+    chmod +x foo
+}
+
+
+noerror
+try "./foo"
+noerror
+is out './foo
+'
+

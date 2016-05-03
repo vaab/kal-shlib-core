@@ -421,7 +421,7 @@ apply_opt() {
 time_exec() {
     local x errlvl out
     exec 3>&1 4>&2
-    out=$(TIMEFORMAT="%R %U %S"; { time echo "$*" | timing bash 1>&3 2>&4; } 2>&1)
+    out=$(TIMEFORMAT="%R %U %S"; { time timing bash -c "$*" 1>&3 2>&4; } 2>&1)
     errlvl=$?
     read r u s <<<$(echo "$out" | tr -d ".")
     for x in r u s; do
