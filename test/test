@@ -1,7 +1,17 @@
 #!/bin/bash
 
+## This is a small shunit library. It should suffice to itself, and focus
+## on Doctest like tests. This is still in early alpha stage, and should be
+## distributed in its own package only when achieving better maturity.
+
+## TODO:
+##  - global and local variables are all over and messed up and undocumented
+##  - better statistics (usage of median ?)
+##  - better measures... precision and what is measured.
+##  - doc is needed
 
 exname="$(basename $0)"
+
 if ! [ -d "../pkg" ]; then
     echo "Please execute this in test directory, with './$exname'." >&2
     exit 1
@@ -68,6 +78,7 @@ if [ -t 1 ]; then
     NORMAL=$(echo -en "\e[0m")
 
 fi
+
 TEST_LINE_TEMPLATE=" - %-40s $GRAY%-25s$NORMAL "
 TEST_LINE_END_Q="[ $GRAY%8s$NORMAL ]\n"
 TEST_LINE_END_S="[ $DARKYELLOW%6s${NORMAL} s ]\n"
@@ -89,6 +100,7 @@ calc() {
         exit 1
     fi
 }
+
 time_note() { calc 1 "l($1 - $empty_try_time) / l(10) - 3"; }
 prefix() { local prefix=${1:-"  $GRAY|$NORMAL "}; sed -r "s/^/$prefix/g"; }
 
@@ -100,8 +112,6 @@ fn.cp() {
 fn.exists() {
     declare -F "$1" >/dev/null
 }
-
-
 
 
 timing() {
@@ -262,7 +272,6 @@ should_we_repeat() {
     fi
     return 1
 }
-
 
 first_non_zero=
 swallow_last_time() {
@@ -470,7 +479,7 @@ is() {
     case "$type" in
 	    "")      [ "$code" == "$output" ];;
         "part")  [[ "$output" == *"$code"* ]];;
-	    "reg")   echo -n "$output" | egrep -- "$code" >/dev/null 2>&1 ;;
+	    "reg")   echo -n "$output" | egrep -- "$code" >/dev/null 2>&1;;
     esac && {
         ((++nb_assert))
         return 0
@@ -517,8 +526,6 @@ tmp_out="$libtest_tmpdir/stdout"
 tmp_err="$libtest_tmpdir/stderr"
 tmp_errlvl="$libtest_tmpdir/errlvl"
 tmp_profile="$libtest_tmpdir/profile"
-
-
 
 
 ## keeps those empty 'try': they are are ways to estimate the

@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 
 source="$1"
-
-shift
-
-exec /bin/bash -c "
+if [ "$source" ]; then
+    exec /bin/bash -c "
 
 if [ -e /etc/shlib ]; then
      . /etc/shlib || {
@@ -15,4 +13,7 @@ fi
 
 . \"$source\"
 
-" "$source" "$@"
+" "$@"
+else
+    echo "You should use bash-shlib only in a shebang." >&2; exit 1
+fi

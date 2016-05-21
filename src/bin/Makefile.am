@@ -1,12 +1,7 @@
-bin_PROGRAMS = shlib bash-shlib
+bin_PROGRAMS = shld bash-shlib
 
-# nodist_sysconf_DATA = shlib
-dist_shlib_SOURCES = shlib.sources
+dist_shld_SOURCES = shld
 dist_bash_shlib_SOURCES = bash-shlib
 
-shlib$(EXEEXT): shlib.sources Makefile.am
-	cat shlib.sources | \
-	sed "s,%%sysconfdir%%,$(sysconfdir),g" > shlib$(EXEEXT)
-
-EXTRA_DIST = shlib.sources bash-shlib
+EXTRA_DIST = shld bash-shlib
 DISTCLEANFILES = shlib

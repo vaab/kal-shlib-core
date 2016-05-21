@@ -1,0 +1,360 @@
+#!/bin/bash
+# Begin shld
+
+## Shell lib linker
+##
+## Manage insertion of code in your shell script to include
+## kal-shlib-* code.
+##
+
+##
+## Some variables
+##
+
+tmp_dir=/tmp
+etc_location=/etc/shlib
+
+[ "$SHLIB" != "" ] || SHLIB="$etc_location"
+
+exname=$(basename $0)
+
+usage="usage:
+  $exname
+  $exname {script-name}
+  $exname d {script-name}
+  $exname s {script-name}
+  $exname get {var-name}"
+
+
+##
+## Argument parsing
+##
+
+die() { echo "$*" >&2 ; exit 1; }
+
+
+if [ "$#" == "0" ]; then
+    if ! [ -f "$etc_location" -a -r "$etc_location" ]; then
+        die "$exname: can't access config file '$etc_location'."
+    fi
+
+    cat "$etc_location"
+    exit 0
+fi
+
+if ! file --help >/dev/null 2>&1 ; then
+    die "$exname: can't find the 'file' executable."
+fi
+
+if [ -z "$1" -o "$#" -gt 2 ]; then
+    die "$usage"
+fi
+
+if [ "$#" == 2 ]; then
+
+    if [ "$1" != "d" ] && [ "$1" != "s" ] && [ "$1" != "get" ]; then
+        die "Bad first argument, must be 'd' or 's' or 'get'."$'\n'"$usage"
+    fi
+
+    if [ "$1" == "get" ]; then
+        for i in SHLIB;do
+            if [ "$i" == "$2" ]; then
+                eval echo \$$i
+                exit 0;
+            fi
+        done
+        echo "Bad var name '$2'" >&2
+        exit 1;
+    fi
+
+    mode="$1"
+    shift
+else
+    mode="q"
+fi
+
+##
+## Checking sanity of arguments
+##
+
+test -f "$1" || die "$exname: file '$1' not found."
+test -x "$1" || die "$exname: file '$1' not an executable."
+file -b "$1" | grep "text" >/dev/null || die "$exname: file '$1' is binary."
+head -n 1 "$1" | grep '^#!' >/dev/null ||
+    die "$exname: file '$1' doesn't seem to be a script."
+
+target="$1"
+
+##
+## Functions
+##
+
+get_incs() {
+    ## XXXvlab: Note that this way of looking for all ``include`` calls is far from
+    ## perfect
+    echo "$1" | grep -E "\<include\> +\<\w+\>"  \
+        | sed 's/.*include \+\(\w\+\)/\1/g' \
+        | sort \
+        | uniq
+}
+
+contains () {
+    local e
+    for e in "${@:2}"; do [[ "$e" == "$1" ]] && return 0; done
+    return 1
+}
+
+get_fun() {
+    local target="$1"
+    for fun in $(egrep "^\s*(function\s+)?[a-zA-Z_0-9-]+\s*\(\s*\)\s*(\{.*)?$" "$target" |
+                        cut -f 1 -d "(" | sort -u); do
+        [ "$fun" == "function" ] && continue
+        echo "$fun"
+    done
+}
+
+get_code() {
+    local target="$1"
+
+    incs=($(get_incs "$(cat "$target")"))
+
+    test "$SHLIB" || die "$exname: 'SHLIB' var is not set"
+    test -r "$SHLIB" || die "$exname: couldn't read '$SHLIB'."
+
+
+    ## By sourcing $SHLIB we are looking for the ``$SHLIB_PATH`` value.
+    read -d ' ' SHLIB_PATH SHLIB_PREFIX SHLIB_SUFFIX SHLIB_AUTOLOAD_PATH < <(
+        . $SHLIB > /dev/null
+        echo "$SHLIB_PATH"
+        echo "$SHLIB_PREFIX"
+        echo "$SHLIB_SUFFIX"
+        echo "$SHLIB_AUTOLOAD_PATH"
+    )
+
+    if ! test "$SHLIB_PATH"; then
+        echo "$exname: '$SHLIB' did not set SHLIB_PATH variable."
+    fi
+    if ! test "$SHLIB_PREFIX"; then
+        echo "$exname: '$SHLIB' did not set SHLIB_PREFIX variable."
+    fi
+
+    if ! test "$SHLIB_SUFFIX"; then
+        echo "$exname: '$SHLIB' did not set SHLIB_SUFFIX variable."
+    fi
+
+    if [ -d "$SHLIB_AUTOLOAD_PATH" ]; then
+        for script in "$SHLIB_AUTOLOAD_PATH"/*.sh; do
+            [ -f "$script" ] || continue
+            autoload="$autoload"$'\n'"$(cat "$script")"$'\n'"$(get_fun "$script" | sed -r 's/^/export -f /g')"
+            sub_incs=($(get_incs "$(cat "$script")"))
+            for j in "${sub_incs[@]}"; do
+                [ "${done_inc[$j]}" ] && continue      # already done
+                contains "$j" "${incs[@]}" && continue # already in tail
+                incs+=("$j")                           # append to tail
+            done
+        done
+    fi
+
+    declare -A done_inc
+    while [ "${#incs[@]}" -gt 0 ]; do
+        i="${incs[0]}"
+        incs=("${incs[@]:1}")
+        done_inc[$i]=1
+
+        filename="$SHLIB_PATH/$SHLIB_PREFIX$i$SHLIB_SUFFIX"
+
+        test -f "$filename" -a -r "$filename" ||
+            die "$exname: error: file '$filename' cannot be open for read."
+
+        insert_gz="$(cat "$filename")"$'\n'"$(get_fun "$filename" | sed -r 's/^/export -f /g')"
+
+        # Add new include to tail of list
+        sub_incs=($(get_incs "$insert_gz"))
+        for j in "${sub_incs[@]}"; do
+            [ "${done_inc[$j]}" ] && continue      # already done
+            contains "$j" "${incs[@]}" && continue # already in tail
+            incs+=("$j")                           # append to tail
+        done
+
+        code="$code"$'\n\n'"            \"$i\")"$'\n\n'"$insert_gz"$'\n\n            ;;\n'
+    done
+
+
+
+    cat <<EOF
+include() {
+    while test "\$1"; do
+        case "\$1" in
+$code
+            *) echo "\$FUNCNAME: '\$1' not found." >&2 ; exit 1;;
+        esac
+        shift
+    done
+}
+
+$autoload
+EOF
+
+}
+
+
+probe_legacy:run() {
+    local target="$1" mode="$2" between_code shlib_sep_open_linenb shlib_sep_close_linenb nb_sep
+
+    if grep -Pa '\x00' "$target" >/dev/null; then
+        die "Does not support files having null characters, and your files have some.
+   (use \`\`grep -Pa '\x00' $target\`\` to see where.)."
+    fi
+
+    if ! grep '^#!-' -m 1 "$target" >/dev/null; then
+        die "file '$target' doesn't contain an opening '#!-' loader separator."
+    fi
+    nb_sep=$(grep '^#!-' -m 2 "$target" | wc -l)
+    if [ "$nb_sep" -lt 2 ]; then
+        die "file '$target' doesn't contain a closing '#!-' loader call."
+    fi
+
+    shebang=$(head -n 1 "$target")              ## shebang
+
+    read -d ' ' beg end < <(grep -nE  '^#!-' -m 2 "$target" | cut -f 1 -d ":")
+
+    ## get anything before this separator.
+    between=$(head -n "$((beg - 1))" "$target" | tail -n +2; echo -n 'x')
+    between=${between::-1}
+
+    ## check for code here
+    between_code=$(echo "$between" | sed 's/\#.*$//g;s/^ *//g;s/ *$//g' | grep -v "^$" )
+    test -z "$between_code" || die "$exname: code found before first '#!-' statement."
+
+    shlib_sep_line=$(tail -n "+$beg" "$target" | head -n 1)
+
+    part_begin="$shebang"$'\n'"$between$shlib_sep_line"
+
+    between=$(head -n "$((end - 1))" "$target" | tail -n +"$((beg + 1))")
+    part_end=$(tail -n "+$end" "$target")
+
+    between_first_line=$(
+        echo "$between" | sed 's/^ *//g;s/ *$//g' |
+            grep -v "^$" | head -n 1)
+
+    if echo "$between_first_line" | egrep '^\s*(.|source)\s+.*$' >/dev/null; then
+        state="shared"
+        orig_src=$(echo "$between_first_line" | sed -r 's/^\s*(.|source)\s+(.*)$/\2/g')
+    elif echo "$between_first_line" | egrep '^## orig-src: .*$' >/dev/null; then
+        state="static"
+        orig_src=$(echo "$between_first_line" | sed -r 's/^## orig-src: (.*)$/\1/g')
+    else
+        die "Unrecognised first line: '$between_first_line'"
+    fi
+
+    case "$mode" in
+        "q") echo "$state";;
+        "d")
+            [ "$state" == "shared" ] && return 0
+            prepare_tmpfile "$target"
+            {
+                echo "$part_begin"
+                echo ". ${orig_src}"
+                echo "$part_end"
+            } > "$tmp_file"
+            mv "$tmp_file" "$target"
+            chmod +x "$target"
+            ;;
+        "s")
+            [ "$state" == "static" ] && return 0
+            prepare_tmpfile "$target"
+            {
+                echo "$part_begin"
+                echo "## orig-src: ${orig_src}"
+                get_code "$target"
+                echo "$part_end"
+            } > "$tmp_file"
+            mv "$tmp_file" "$target"
+            chmod +x "$target"
+            ;;
+        *) die "Invalid mode '$mode'.";;
+    esac
+}
+
+probe_bash_shlib_MARKER_LINE_REGEX='^#!- orig-shebang: (.*bash-shlib.*)$'
+
+probe_bash-shlib:run() {
+    local target="$1" mode="$2" between_code shlib_sep_open_linenb shlib_sep_close_linenb
+
+    if grep -Pa '\x00' "$target" >/dev/null; then
+        die "Does not support files having null characters, and your files have some.
+   (use \`\`grep -Pa '\x00' $target\`\` to see where.)."
+    fi
+
+    if head -n 1 "$target" | grep '^#!.*bash-shlib.*$' -m 1 >/dev/null; then
+        state=shared
+        orig_shebang=$(head -n 1 "$target")
+        orig_shebang="${orig_shebang##\#\!}"
+    elif head -n 2 "$target" | tail -n 1 | egrep "${probe_bash_shlib_MARKER_LINE_REGEX}" -m 1 >/dev/null; then
+        state=static
+        orig_shebang="$(head -n 2 "$target" | tail -n 1 | sed -r "s/${probe_bash_shlib_MARKER_LINE_REGEX}/\1/g")"
+    else
+        die "file '$target' doesn't contain a shebang mentionning 'bash-shlib', nor the static bash-shlib marker."
+    fi
+
+    case "$mode" in
+        "q") echo "$state";;
+        "d")
+            [ "$state" == "shared" ] && return 0
+            prepare_tmpfile "$target"
+            {
+                echo '#!'"$orig_shebang"
+                read -d ' ' beg end < <(grep -nE  '^#!-' -m 2 "$target" | cut -f 1 -d ":")
+                tail -n +"$((end + 1))" "$target"
+            } > "$tmp_file"
+            mv "$tmp_file" "$target"
+            chmod +x "$target"
+            ;;
+        "s")
+            [ "$state" == "static" ] && return 0
+            prepare_tmpfile "$target"
+            {
+                echo '#!/bin/bash'
+                echo '#!- orig-shebang:' "$orig_shebang"
+                get_code "$target"
+                echo '#!-'
+                tail -n +2 "$target"
+            } > "$tmp_file"
+            mv "$tmp_file" "$target"
+            chmod +x "$target"
+            ;;
+        *) die "Invalid mode '$mode'.";;
+    esac
+}
+
+
+prepare_tmpfile() {
+    local target="$1"
+    test -d "$tmp_dir" || die "$exname: '$tmp_dir' can't be accessed."
+
+    pid="$$"
+    tmp_file="$tmp_dir/$pid.tmp"
+
+    ## copies attributes also (like +x)
+    cp "$target" "$tmp_file" || die "$exname: copy to '$tmp_file' failed."
+}
+
+
+##
+## Probing file
+##
+
+err=""
+for fn in $(declare -F | cut -f 3 -d " " | grep '^probe_.*:run'); do
+    name=${fn##probe_}; name=${name%%:run}
+    {
+        err="$err"$'\n'"$(
+            set -o pipefail
+            probe_$name:run "$target" "$mode" 3>&2 2>&1 1>&3 | 
+                sed -r "s/^/  $name: /g")"
+    } 3>&2 2>&1 1>&3 && exit 0
+done
+
+die "No probing method applied to your target file '$1':$err"
+
+# End shld

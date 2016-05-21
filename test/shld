@@ -1,0 +1,619 @@
+# -*- mode: shell-script -*-
+
+prefix_cmd=""
+export _shlib_loaded=
+export _shlib_included=
+unset -f include
+
+tprog=$base/src/bin/shld
+
+##
+## shld
+##
+
+teardown() { cd "$test_tmpdir"; rm -rf test1; }
+
+export SHLIB_PATH=$test_tmpdir/test1
+
+
+## Refuse if no '#!-' found
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > libxxx.sh
+echo popo
+EOF
+    cat <<EOF > foo
+#!/bin/bash
+
+. $base/src/etc/shlib.sources
+
+echo a
+include xxx
+echo b
+EOF
+    chmod +x foo
+}
+
+try "$tprog foo_not_existent"
+is errlvl 1
+is out ""
+is err reg "not found"
+
+try "$tprog foo"
+is errlvl 1
+is out ""
+is err reg "legacy:"
+is err reg "No probing method"
+is err reg "an opening"
+is err reg "shebang .*bash-shlib"
+
+## Refuse file if only one separator found
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > libxxx.sh
+echo popo
+EOF
+    cat <<EOF > foo
+#!/bin/bash
+
+#!-
+. $base/src/etc/shlib.sources
+
+echo a
+include xxx
+echo b
+EOF
+    chmod +x foo
+}
+
+try "$tprog foo"
+is errlvl 1
+is out ""
+is err reg "No probing method"
+is err reg "a closing"
+
+
+## Accept file if 2+ separator are found (only the first 2 will be used)
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > libxxx.sh
+echo popo
+EOF
+    cat <<EOF > foo
+#!/bin/bash
+
+#!-
+. $base/src/etc/shlib.sources
+#!-
+
+#!- Ignored
+
+echo a
+include xxx
+echo b
+EOF
+    chmod +x foo
+}
+
+try "$tprog foo"
+is err ""
+is errlvl 0
+is out "shared
+"
+
+
+## Refuse file if there are NUL chars inside
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > libxxx.sh
+echo popo
+EOF
+    cat <<EOF > foo0
+#!/bin/bash
+
+#!-
+. $base/src/etc/shlib.sources
+#!-
+
+echo a
+include xxx
+echo b
+EOF
+    echo -e '\0' >> foo0
+    chmod +x foo0
+}
+
+try "cat foo0 | hd; $tprog foo0"
+is errlvl 1
+
+
+
+
+##
+## Statically link file.
+##
+
+## Accept normal case
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > libxxx.sh
+echo popo
+EOF
+    cat <<EOF > foo
+#!/bin/bash
+
+#!-
+. $base/src/etc/shlib.sources
+#!-
+
+echo a
+include xxx
+echo b
+EOF
+    chmod +x foo
+}
+
+try "$tprog s foo && ./foo"
+noerror
+is out "a
+popo
+b
+"
+
+## Accept normal bash-shlib case
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > libxxx.sh
+echo popo
+EOF
+    cat <<EOF > foo
+#!/usr/bin/env bash-shlib
+
+echo a
+include xxx
+echo b
+EOF
+    chmod +x foo
+}
+
+try "$tprog s foo && ./foo"
+noerror
+is out "a
+popo
+b
+"
+
+## special characters
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > libxxx.sh
+echo -e "popo\\ntoto"
+EOF
+    cat <<EOF > foo
+#!/bin/bash
+
+#!-
+. $base/src/etc/shlib.sources
+#!-
+
+echo a
+include xxx
+echo b
+EOF
+    chmod +x foo
+}
+
+try "$tprog s foo && ./foo"
+noerror
+is out "a
+popo
+toto
+b
+"
+
+## recursive include
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > libxxx.sh
+include yyy
+echo -e "popo\\ntoto"
+EOF
+    cat <<EOF > libyyy.sh
+echo -e "pupu\\ntutu"
+EOF
+    cat <<EOF > foo
+#!/bin/bash
+
+#!-
+. $base/src/etc/shlib.sources
+#!-
+
+echo a
+include xxx
+echo b
+EOF
+    chmod +x foo
+}
+
+try "$tprog s foo && ./foo"
+noerror
+is out "a
+pupu
+tutu
+popo
+toto
+b
+"
+
+##
+## Reversing to dynamic case
+##
+
+
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > libxxx.sh
+echo popo
+EOF
+    cat <<EOF > foo
+#!/bin/bash
+
+#!-
+. $base/src/etc/shlib.sources
+#!-
+
+echo a
+include xxx
+echo b
+EOF
+    chmod +x foo
+}
+
+try "$tprog s foo && $tprog d foo && ./foo"
+noerror
+is out "a
+popo
+b
+"
+
+try "$tprog foo && $tprog s foo && $tprog foo"
+is err ""
+is out "shared
+static
+"
+
+
+# is file the same ?
+
+FOO_ORIG=$(cat <<EOF
+#!/bin/bash
+
+## random comments
+
+
+#!-
+. $base/src/etc/shlib.sources
+#!-
+
+echo a
+include xxx
+echo b
+
+
+EOF
+)
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > libxxx.sh
+echo popo
+EOF
+    echo "$FOO_ORIG" > foo
+    chmod +x foo
+    cp foo foo.orig
+}
+
+try "$tprog s foo && $tprog d foo && cat foo"
+is err ""
+is out "$FOO_ORIG
+"
+is errlvl 0
+
+
+##
+## With bash-shlib
+##
+
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > libxxx.sh
+echo popo
+EOF
+    cat <<EOF > foo
+#!/usr/bin/env bash-shlib
+
+echo a
+include xxx
+echo b
+EOF
+    chmod +x foo
+}
+
+try "$tprog s foo && $tprog d foo && ./foo"
+noerror
+is out "a
+popo
+b
+"
+
+try "$tprog foo && $tprog s foo && $tprog foo"
+is err ""
+is out "shared
+static
+"
+
+
+# is file the same ?
+
+FOO_ORIG=$(cat <<EOF
+#!/bin/env bash-shlib
+
+echo a
+include xxx
+echo b
+EOF
+)
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > libxxx.sh
+echo popo
+EOF
+    echo "$FOO_ORIG" > foo
+    chmod +x foo
+    cp foo foo.orig
+}
+
+try "$tprog s foo && $tprog d foo && cat foo"
+is err ""
+is out "$FOO_ORIG
+"
+is errlvl 0
+
+
+##
+## Autoload
+##
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    mkdir -p autoload
+    cat <<EOF > autoload/foo.sh
+echo plop
+EOF
+    cat <<EOF > foo
+#!/bin/bash
+
+#!-
+. $base/src/etc/shlib.sources
+#!-
+
+echo a
+EOF
+    chmod +x foo
+}
+
+
+try "$tprog s foo && ./foo"
+is err ""
+is errlvl 0
+is out "plop
+a
+"
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    mkdir -p autoload
+    cat <<EOF > autoload/foo.sh
+echo plop
+EOF
+    cat <<EOF > foo
+#!/usr/bin/env bash-shlib
+
+echo a
+EOF
+    chmod +x foo
+}
+
+
+try "$tprog s foo && ./foo"
+is err ""
+is errlvl 0
+is out "plop
+a
+"
+
+##
+## Export
+##
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    mkdir -p autoload
+    cat <<EOF > autoload/foo.sh
+echo plop
+
+testxxx_autoload_fun() { :; }
+EOF
+    cat <<EOF > libxxx.sh
+echo popo
+testxxx_include_fun() { :; }
+EOF
+    cat <<EOF > foo
+#!/bin/bash
+
+#!-
+. $base/src/etc/shlib.sources
+#!-
+
+echo a
+include xxx
+echo b
+declare -F | grep testxxx
+EOF
+    chmod +x foo
+}
+
+
+try "$tprog s foo && ./foo"
+is err ""
+is errlvl 0
+is out "plop
+a
+popo
+b
+declare -fx testxxx_autoload_fun
+declare -fx testxxx_include_fun
+"
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    mkdir -p autoload
+    cat <<EOF > autoload/foo.sh
+echo plop
+
+testxxx_autoload_fun() { :; }
+EOF
+    cat <<EOF > libxxx.sh
+echo popo
+testxxx_include_fun() { :; }
+EOF
+    cat <<EOF > foo
+#!/usr/bin/env bash-shlib
+
+echo a
+include xxx
+echo b
+declare -F | grep testxxx
+EOF
+    chmod +x foo
+}
+
+
+try "$tprog s foo && ./foo"
+is err ""
+is errlvl 0
+is out "plop
+a
+popo
+b
+declare -fx testxxx_autoload_fun
+declare -fx testxxx_include_fun
+"
+
+
+
+##
+## Autoload containing include
+##
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    mkdir -p autoload
+    cat <<EOF > autoload/foo.sh
+echo plop
+
+testxxx_autoload_fun() { :; }
+
+include xxx
+EOF
+    cat <<EOF > libxxx.sh
+echo popo
+testxxx_include_fun() { :; }
+EOF
+    cat <<EOF > foo
+#!/bin/bash
+
+#!-
+. $base/src/etc/shlib.sources
+#!-
+
+echo a
+EOF
+    chmod +x foo
+}
+
+
+try "$tprog s foo && ./foo"
+is err ""
+is errlvl 0
+is out "plop
+popo
+a
+"
+
+
+
+##
+## Double static
+##
+
+FOO_ORIG=$(cat <<EOF
+#!/bin/env bash-shlib
+
+echo a
+include xxx
+echo b
+EOF
+)
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > libxxx.sh
+echo popo
+EOF
+    echo "$FOO_ORIG" > foo
+    chmod +x foo
+    cp foo foo.orig
+}
+
+try "$tprog d foo && cat foo"
+is err ""
+is out "$FOO_ORIG
+"
+is errlvl 0
+
+
+try "$tprog s foo && $tprog s foo && $tprog d foo && cat foo"
+is err ""
+is out "$FOO_ORIG
+"
+is errlvl 0
