@@ -1,4 +1,4 @@
-
+# -*- mode: shell-script -*-
 
 export _shlib_loaded=
 export _shlib_included=
