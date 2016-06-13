@@ -177,7 +177,6 @@ line() {
 ## functions
 ##
 
-
 empty_try_time_sum=0
 
 calc() {
@@ -464,6 +463,7 @@ _replay_last_test() {
     done
     nb_assert=$save_nb_assert
 }
+
 
 try() {
     if [ "$FILTER" ]; then
