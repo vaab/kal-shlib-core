@@ -31,6 +31,10 @@ while [ "$#" != 0 ]; do
         --profile|-p)
             export PROFILE=true
             ;;
+        --filter|-f)
+            export FILTER=$2
+            shift
+            ;;
         --version|-V)
             print_version
             exit 0
@@ -462,6 +466,16 @@ _replay_last_test() {
 }
 
 try() {
+    if [ "$FILTER" ]; then
+        if [[ "$2" =~ $FILTER ]]; then
+            deactivate=
+        else
+            deactivate=true
+            return 0
+        fi
+    else
+        deactivate=
+    fi
     swallow_last_time
     nb_assert=0
     replay_count=1
@@ -540,6 +554,9 @@ errlvl() { cat "$tmp_errlvl"; }
 var() { echo "${!1}"; }
 
 is() {
+    if [ "$deactivate" == "true" ]; then
+        return 0
+    fi
     local act="$1" type code
     nb_assert=${nb_assert:-0}
     eval "assertion_${nb_assert}=(\"\$@\")"
