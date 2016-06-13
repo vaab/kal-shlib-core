@@ -1,3 +1,4 @@
+# -*- mode: shell-script -*-
 
 prefix_cmd=""
 export _shlib_loaded=
