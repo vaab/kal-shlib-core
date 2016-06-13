@@ -1,0 +1,16 @@
+# -*- mode: shell-script -*-
+
+prefix_cmd=". $base/src/etc/shlib.sources"
+export _shlib_loaded=
+export _shlib_included=
+
+export SHLIB_PATH=$test_tmpdir/test1
+
+
+try "
+echo 'foo() { :;}' | _convert_fn_names
+" "basic convertion"
+noerror
+is out reg "^SHLIB_"
+is out reg "^export -f .*SHLIB_"
+is out reg "^_pkg_fns"

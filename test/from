@@ -1,0 +1,427 @@
+# -*- mode: shell-script -*-
+
+prefix_cmd=""
+export _shlib_loaded=
+export _shlib_included=
+
+teardown() { cd "$test_tmpdir"; rm -rf test1; }
+
+export SHLIB_PATH=$test_tmpdir/test1
+
+
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1; cd test1
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+from mypack-2.5::xxx
+
+EOF
+    chmod +x foo
+}
+
+try "./foo" "bad syntax: no 'import'"
+is errlvl 1
+is err reg "syntax"
+is err reg "from"
+is err reg "import"
+
+
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1; cd test1
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+from xxx import toto
+
+EOF
+    chmod +x foo
+}
+
+try "./foo" "bad syntax: file_spec invalid"
+is errlvl 1
+is err reg "syntax"
+is err reg "from"
+is err reg "file spec"
+
+##
+## 
+##
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    mkdir -p mypack/2.5
+    cat <<EOF > mypack/2.5/libxxx.sh
+echo loading
+bar0() { echo bar; }
+bar1() {
+echo bar; }
+function bar2() { :; }
+  function   bar3 ( )    { # comment
+:; }
+bar4()
+{ :; }
+EOF
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+from mypack-2.5::xxx import foo0-:
+
+EOF
+    chmod +x foo
+}
+
+try "./foo" "bad syntax: codeblock name invalid"
+is errlvl 1
+is err reg "from"
+is err reg "does not match"
+is err reg "foo0-"
+
+
+##
+## 
+##
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    mkdir -p mypack/2.5
+    cat <<EOF > mypack/2.5/libxxx.sh
+echo loading
+bar0() { echo bar; }
+bar1() {
+echo bar; }
+function bar2() { :; }
+  function   bar3 ( )    { # comment
+:; }
+bar4()
+{ :; }
+EOF
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+from mypack-2.5::xxx import bar0 bar
+
+declare -F | grep 'declare -fx bar[0-9]*\$'
+EOF
+    chmod +x foo
+}
+
+try "./foo" "bad syntax: codeblock name not found"
+is errlvl 1
+is err reg "no function"
+is err reg "bar"
+
+
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    mkdir -p mypack/2.5
+    cat <<EOF > mypack/2.5/libxxx.sh
+echo loading
+bar0() { echo bar; }
+bar1() {
+echo bar; }
+function bar2() { :; }
+  function   bar3 ( )    { # comment
+:; }
+bar4()
+{ :; }
+EOF
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+from mypack-2.5::xxx import bar0 bar2
+
+declare -F | grep 'declare -fx bar[0-9]*\$'
+EOF
+    chmod +x foo
+}
+
+try "./foo" "bad syntax: codeblock correctly found"
+noerror
+is out "declare -fx bar0
+declare -fx bar2
+"
+
+
+##
+## 
+##
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    mkdir -p mypack/2.5
+    cat <<EOF > mypack/2.5/libxxx.sh
+echo loading libxxx.sh
+bar1() { echo bar1; }
+bar2() { echo bar2; }
+EOF
+    cat <<EOF > foo2
+#!$base/src/bin/bash-shlib
+
+from mypack-2.5::xxx import bar2
+
+declare -F | grep 'bar[0-9]*\$'
+
+EOF
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+from mypack-2.5::xxx import bar1
+from mypack-2.5::xxx import bar2
+
+./foo2
+EOF
+    chmod +x foo foo2
+}
+try "./foo" "'from' not importing code twice"
+noerror
+is out "declare -fx bar1
+declare -fx bar2
+"
+
+
+##
+## 
+##
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    mkdir -p mypack/2.5
+    cat <<EOF > mypack/2.5/libxxx.sh
+echo loading 2.5/libxxx.sh
+bar1() { echo bar1; }
+bar2() { echo bar2 v2.5; }
+EOF
+    mkdir -p mypack/2.6
+    cat <<EOF > mypack/2.6/libxxx.sh
+echo loading 2.6/libxxx.sh
+bar1() { echo bar1; }
+bar2() { echo bar2 v2.6; }
+EOF
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+from mypack-2.5::xxx import bar1
+from mypack-2.6::xxx import bar2
+
+declare -F | egrep 'declare -fx SHLIB_' | wc -l
+declare -F | egrep 'declare -fx bar[0-9]'
+bar1
+bar2
+EOF
+    chmod +x foo
+}
+try "./foo" "'from' not storing the same code twice"
+
+noerror
+## only 3 SHLIB
+is out "3
+declare -fx bar1
+declare -fx bar2
+bar1
+bar2 v2.6
+"
+
+
+##
+## 
+## 
+
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    mkdir -p mypack/2.5
+    cat <<EOF > mypack/2.5/libxxx.sh
+echo loading libxxx.sh
+bar1() { echo bar1 v2.5; }
+bar2() { echo bar2 v2.5; }
+EOF
+    mkdir -p mypack/2.6
+    cat <<EOF > mypack/2.6/libxxx.sh
+echo loading libxxx.sh
+bar1() { echo bar1 v2.6; }
+bar2() { echo bar2 v2.6; }
+EOF
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+from mypack-2.5::xxx import bar1
+from mypack-2.6::xxx import bar2
+
+declare -F | grep 'declare -fx bar'
+bar1
+bar2
+EOF
+    chmod +x foo
+}
+try "DEBUG=true ./foo" "'from' can load 2 fn of same package in diff version."
+is err ""
+noerror
+is out "declare -fx bar1
+declare -fx bar2
+bar1 v2.5
+bar2 v2.6
+"
+
+##
+##
+##
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    mkdir -p mypack/2.5
+    cat <<EOF > mypack/2.5/libxxx.sh
+echo loading libxxx.sh
+bar1() { echo bar1; }
+bar2() { echo bar2-2.5; }
+EOF
+    mkdir -p mypack/2.6
+    cat <<EOF > mypack/2.6/libxxx.sh
+echo loading libxxx.sh
+bar1() { echo bar1; }
+bar2() { echo bar2-2.6; }
+EOF
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+from mypack-2.5::xxx import bar1
+from mypack-2.6::xxx import bar1
+
+declare -F | grep 'declare -fx bar'
+EOF
+    chmod +x foo
+}
+try "DEBUG=true ./foo" "'from' can load same fn, same code in diff version in same shell."
+is err ""
+noerror
+is out "declare -fx bar1
+"
+
+
+
+##
+##
+##
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    mkdir -p mypack/2.5
+    cat <<EOF > mypack/2.5/libxxx.sh
+echo loading libxxx.sh
+bar1() { echo bar1-2.5; }
+bar2() { echo bar2-2.5; }
+EOF
+    mkdir -p mypack/2.6
+    cat <<EOF > mypack/2.6/libxxx.sh
+echo loading libxxx.sh
+bar1() { echo bar1-2.6; }
+bar2() { echo bar2-2.6; }
+EOF
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+from mypack-2.5::xxx import bar1
+from mypack-2.6::xxx import bar1
+
+declare -F | grep 'declar -fx bar'
+declare -f bar1
+EOF
+    chmod +x foo
+}
+try "DEBUG=true ./foo" "'from' can't load same fn in diff version in same shell."
+is err "foo: error: you can't override 'bar1' that was previouly imported.
+  Note: you can use subshells to allow this behavior.
+foo: error: 'from mypack-2.6 import bar1' failed.
+"
+is errlvl 1
+is out ""
+
+
+##
+##
+##
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    mkdir -p mypack/2.5
+    cat <<EOF > mypack/2.5/libxxx.sh
+echo loading libxxx.sh
+bar1() { echo bar1-2.5; }
+bar2() { echo bar2-2.5; }
+EOF
+    mkdir -p mypack/2.6
+    cat <<EOF > mypack/2.6/libxxx.sh
+echo loading libxxx.sh
+bar1() { echo bar1-2.6; }
+bar2() { echo bar2-2.6; }
+EOF
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+from mypack-2.5::xxx import bar1
+(
+  from mypack-2.6::xxx import bar1
+  bar1
+)
+bar1
+EOF
+    chmod +x foo
+}
+try "DEBUG=true ./foo" "'from' can load same fn in diff version in sub shells."
+is err ""
+noerror
+is out "bar1-2.6
+bar1-2.5
+"
+
+
+##
+##
+##
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    mkdir -p mypack/2.5
+    cat <<EOF > mypack/2.5/libxxx.sh
+echo loading libxxx.sh
+bar1() { echo bar1-2.5; }
+bar2() { echo bar2-2.5; }
+EOF
+    mkdir -p mypack/2.6
+    cat <<EOF > mypack/2.6/libxxx.sh
+echo loading libxxx.sh
+bar1() { echo bar1-2.6; }
+bar2() { echo bar2-2.6; }
+EOF
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+from mypack-2.6::xxx import bar2  ## this will load in memory defs of mypack-2.6
+from mypack-2.5::xxx import bar1
+(
+  from mypack-2.6::xxx import bar1
+  bar1
+)
+bar1
+EOF
+    chmod +x foo
+}
+try "DEBUG=true ./foo" "'from' can load same fn in diff version in sub shells 2."
+is err ""
+noerror
+is out "bar1-2.6
+bar1-2.5
+"
+
