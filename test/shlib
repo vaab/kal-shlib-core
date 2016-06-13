@@ -31,8 +31,7 @@ EOF
     chmod +x foo
 }
 
-try "./foo"
-
+try "./foo" "basic working example"
 noerror
 is out "a
 popo
@@ -55,7 +54,7 @@ EOF
 }
 
 
-try "./foo"
+try "./foo" "including not existing file."
 is errlvl 1
 is err reg "include: error: file '/tmp/tmp.*/test1/libyyy.sh' cannot be open for read.
 "
@@ -82,7 +81,7 @@ EOF
 
 ### autoload
 
-try "./foo"
+try "./foo" "basic autoload test"
 noerror
 is out "foo
 a
