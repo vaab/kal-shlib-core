@@ -477,10 +477,11 @@ try() {
         deactivate=
     fi
     swallow_last_time
+
+    cmd="$1"
     nb_assert=0
     replay_count=1
-    cmd="$*"
-    desc=$cmd
+    test_desc="$2"
     if [ "$cmd" ]; then
         if [ "$PROFILE" ]; then
             test_name=${test_file}_$({ echo "$cmd"; declare -f setup 2>&1 ; cat "$base/test/$exname"; } | md5sum | cut -c -16)
@@ -586,7 +587,7 @@ is() {
 
     echo "${RED}Failed assertion:${NORMAL} ${YELLOW}is $act $type$NORMAL"
     echo "${WHITE}code$NORMAL"
-    echo "$desc" | sed -r "s/^/  $GRAY|$NORMAL /g"
+    echo "$code" | sed -r "s/^/  $GRAY|$NORMAL /g"
     echo "expected ${WHITE}$act $type$NORMAL"
     echo "$code$GRAY\$$NORMAL" | sed -r "s/^/  $GRAY|$NORMAL /g";
     echo "real ${WHITE}$act$NORMAL $YELLOW$*$NORMAL"
