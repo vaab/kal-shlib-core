@@ -17,6 +17,8 @@ if ! [ -d "../pkg" ]; then
     exit 1
 fi
 base=$(realpath "$PWD/..")
+export base
+export SHLIB_PATH="$base/src/lib"
 
 pos_args=()
 PROFILE=${PROFILE:-}
@@ -188,7 +190,9 @@ calc() {
     fi
 }
 
-time_note() { calc 1 "l($1 - $empty_try_time) / l(10) - 3"; }
+time_note() {
+    calc 1 "l($1 - $empty_try_time) / l(10) - 3";
+}
 prefix() { local prefix=${1:-"  $GRAY|$NORMAL "}; sed -r "s/^/$prefix/g"; }
 
 fn.cp() {
@@ -365,9 +369,6 @@ swallow_last_time() {
     total=${total:-0}
     ((total+=nb_assert))
     sum_time=${sum_time:-0}
-    test_counter=${test_counter:-0}
-    ((++test_counter))
-
     [ -e "$tmp_profile" ] || return 0
     load_profile __profile "$tmp_profile" || exit 1
     if [ "$sum_time" == "0" -a -z "$cmd" ]; then  ## catches first empty 'try'
@@ -388,6 +389,8 @@ swallow_last_time() {
         first_non_zero=true
     fi
     nb_assert_string=$(printf "%4s asserts" "$nb_assert")
+    nb_assert=0
+
     decrement_profile __profile __base_profile
     if [ "$PROFILE" ]; then
         cp_profile __profile __stack_profile
@@ -400,7 +403,7 @@ swallow_last_time() {
         while replays=$(should_we_repeat __profile_new __profile_last); do
             while ((replays--)); do
                 _last_timings=${__profile[time.real]}
-                line_s "$test_name $test_desc" "replay $replay_count" "$_last_timings"
+                line_db "$test_name $test_desc" "replay $replay_count" "$_last_timings"
                 _replay_last_test
                 load_profile __additional_profile "$tmp_profile" || exit 1
                 decrement_profile __additional_profile __base_profile
@@ -421,7 +424,7 @@ swallow_last_time() {
         fi
 
         _last_timings=${__profile[time.real]}
-        line_s "$test_name $test_desc" "$nb_assert_string" "$_last_timings"
+        line_db "$test_name $test_desc" "$nb_assert_string" "$_last_timings"
         if [ "$DIFF" ]; then
             load_profile __ref_profile "$base/.profile/$DIFF/$test_name"
             decrement_profile __ref_profile __profile
@@ -444,16 +447,95 @@ swallow_last_time() {
 }
 
 
+## Runs command, capture stdin and stdout, prints one line if wanted, and
+## full log on failure (on returncode of inner code <> 0)
+function Wrap() {
+
+    local quiet=false error desc trace quit_on_error errlvl args=() cmd \
+          code subshell error_unset
+
+    while [ "$#" != 0 ]; do
+        case "$1" in
+            "-q") quiet="";;
+            "-d") desc=$2; shift;;
+            "-e") error=true;;
+            "-u") error_unset=true;;
+            "-t") trace=true;;
+            "-s") subshell=true;;
+            "-x") quit_on_error=true;;
+            *) args=("${args[@]}" "$1");;
+        esac
+        shift
+    done
+
+    if test -z "${args[*]}"; then
+        code=$(cat -)
+        [ "$quiet" == false -a -z "$desc" ] &&
+        print_error "no description for warp command"
+        [ "$quiet" ] && echo "$desc"
+        code="
+$([ -z "$error" ] || echo "set -e")
+$([ -z "$trace" ] || echo "set -x")
+$([ -z "$error_unset" ] || echo "set -u")
+$code"
+        if [ -z "$subshell" ]; then
+            cmd=("bash" "-c" "$code")
+        else
+            cmd=("$code")
+        fi
+    else
+        code="${args[*]}"
+        test -z "$desc" && desc="$code"
+        [ "$quiet" ] && echo "$desc"
+        cmd=("$([ -z "$error" ] || echo "set -e ;")"
+             "$([ -z "$trace" ] || echo "set -x ;")"
+             "$([ -z "$error_unset" ] || echo "set -u ;")"
+             "${args[@]}")
+        if [ -z "$subshell" ]; then
+            cmd=("bash" "-c" "${cmd[*]}")
+        fi
+    fi
+    output=$({
+                set -o pipefail
+                {
+                    set -o pipefail
+                    eval "${cmd[*]}" |
+                        sed -url1 "s/^/  ${GRAY}|${NORMAL} /g"
+                } 3>&1 1>&2 2>&3 |
+                    sed -url1 "s/^/  ${RED}!${NORMAL} /g" 3>&1 1>&2 2>&3;
+            } 2>&1
+          )
+    errlvl="$?"
+    if [ "$errlvl" == "0" ]; then
+        return 0
+    fi
+
+    echo "${RED}Error in command:${NORMAL}"
+    echo " ${DARKYELLOW}pwd:${NORMAL} $PWD"
+    echo " ${DARKYELLOW}code:${NORMAL}"
+    echo "$code" | sed -url1 "s/^/  ${GRAY}|${NORMAL} /g"
+    echo " ${DARKYELLOW}output (${YELLOW}$errlvl${NORMAL})${DARKYELLOW}:${NORMAL}"
+    echo "$output"
+
+
+    [ -z "$quit_on_error" ] || exit $errlvl
+    return $errlvl
+}
+
+
+
 ## replays last test for profiling reasons
 _replay_last_test() {
     local i cmdline save_nb_assert
     if fn.exists _last_setup; then
-        _last_setup
+        export -f _last_setup
+        Wrap -u -s -t -q -x -e _last_setup
     fi
     time_exec "$_last_prefix_cmd$cmd" 1> "$tmp_out" 2> "$tmp_err"
     echo -n $? > "$tmp_errlvl"
     if fn.exists _last_teardown; then
-        _last_teardown
+        export -f _last_teardown
+        Wrap -u -s -t -q -x -e _last_teardown
     fi
     save_nb_assert="$nb_assert"
     nb_assert=0
@@ -466,7 +548,10 @@ _replay_last_test() {
 
 
 try() {
-    if [ "$FILTER" ]; then
+    test_counter=${test_counter:-0}
+    ((++test_counter))
+
+    if [ "$1" -a "$FILTER" ]; then
         if [[ "$2" =~ $FILTER ]]; then
             deactivate=
         else
@@ -494,7 +579,8 @@ try() {
     if fn.exists setup; then
         fn.cp setup _last_setup
         line "$test_name $test_desc" "setup"
-        setup
+        export -f setup
+        Wrap -u -s -t -q -x -e setup
     else
         unset -f _last_setup 2>/dev/null
     fi
@@ -503,7 +589,8 @@ try() {
     if fn.exists teardown; then
         fn.cp teardown _last_teardown
         line "$test_name $test_desc" "teardown"
-        teardown
+        export -f teardown
+        Wrap -u -s -t -q -x -e teardown
     else
         unset -f _last_teardown  2>/dev/null
     fi
@@ -518,7 +605,7 @@ apply_opt() {
     code=$(cat -; echo 'x')
     code=${code::-1}
     for opt in "$@"; do
-	    code=$(echo "$code" | opt_$opt; echo 'x')
+	    code=$(echo -n "$code" | opt_$opt; echo 'x')
         code=${code::-1}
     done
     echo -n "$code"
@@ -604,9 +691,6 @@ is() {
 
 summary() {
     swallow_last_time
-
-    # echo "$profiler_info"
-    # echo
     echo "$YELLOW$total$NORMAL assertions ${DARKGREEN}passed$NORMAL." \
          "Code took $DARKYELLOW$(echo "scale=3;$sum_time/1000000" | bc)$NORMAL s" \
          "($DARKCYAN$(time_note $sum_time)$NORMAL dB)."
@@ -620,6 +704,8 @@ noerror() {
 
 declare -g libtest_tmpdir=$(mktemp -d)
 declare -g test_tmpdir=$(mktemp -d)
+export test_tmpdir
+export libtest_tmpdir
 trap -- "rm -rf \"$test_tmpdir\" \"$libtest_tmpdir\"" EXIT INT
 
 tmp_out="$libtest_tmpdir/stdout"
@@ -652,7 +738,6 @@ for test_file in "${pos_args[@]}"; do
     [ -x "${test_file}" ] && continue
     test_counter=0
     source "./${test_file}"
-    swallow_last_time
 done
 
 summary

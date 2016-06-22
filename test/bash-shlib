@@ -1,5 +1,6 @@
 # -*- mode: shell-script -*-
 
+prefix_cmd='cd "$test_tmpdir/test1";'
 export _shlib_loaded=
 export _shlib_included=
 export SHLIB_PATH=$test_tmpdir/test1

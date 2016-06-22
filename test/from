@@ -1,6 +1,6 @@
 # -*- mode: shell-script -*-
 
-prefix_cmd=""
+prefix_cmd='cd "$test_tmpdir/test1";'
 export _shlib_loaded=
 export _shlib_included=
 
@@ -339,7 +339,7 @@ EOF
     chmod +x foo
 }
 try "DEBUG=true ./foo" "'from' can't load same fn in diff version in same shell."
-is err "foo: error: you can't override 'bar1' that was previouly imported.
+is err "from: error: you can't override 'bar1' that was previouly imported.
   Note: you can use subshells to allow this behavior.
 foo: error: 'from mypack-2.6 import bar1' failed.
 "
@@ -386,9 +386,6 @@ bar1-2.5
 "
 
 
-##
-##
-##
 
 setup() {
     cd "$test_tmpdir"; mkdir test1;
@@ -424,4 +421,174 @@ noerror
 is out "bar1-2.6
 bar1-2.5
 "
+
+
+
+##
+## We consider normal the fact that environment and function won't be
+## protected if they didn't declare their dependencies.
+##
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    mkdir -p mypack/2.5
+    cat <<"EOF" > mypack/2.5/libxxx.sh
+echo loading libxxx.sh
+bar1() { echo bar1-2.5; }
+bar2() {
+    from mypack-2.5::xxx import bar1
+    echo "$FUNCNAME calling bar1: $(bar1)";
+}
+EOF
+    mkdir -p mypack/2.6
+    cat <<"EOF" > mypack/2.6/libxxx.sh
+echo loading libxxx.sh
+bar1() { echo bar1-2.6; }
+bar2() {
+    from mypack-2.6::xxx import bar1
+    echo "$FUNCNAME calling bar1: $(bar1)";
+}
+bar3() {
+    ## dep to bar1 omitted
+    echo "$FUNCNAME calling bar1: $(bar1)";
+}
+EOF
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+from mypack-2.5::xxx import bar2   ## this will load in memory defs of mypack-2.6
+bar2  ## imports bar1 in version 2.5
+(
+  from mypack-2.6::xxx import bar2 bar3
+  bar3  ## no import
+  bar2  ## imports and override bar1 in version 2.6
+  bar3  ## this call gets a different output from previous
+)
+EOF
+    chmod +x foo
+}
+try "DEBUG=true ./foo" "'from' breaks repetability of functions."
+is err ""
+noerror
+is out "bar2 calling bar1: bar1-2.5
+bar3 calling bar1: bar1-2.5
+bar2 calling bar1: bar1-2.6
+bar3 calling bar1: bar1-2.6
+"
+
+
+##
+## This is the fixed behavior
+##
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    mkdir -p mypack/2.5
+    cat <<"EOF" > mypack/2.5/libxxx.sh
+echo loading libxxx.sh
+bar1() { echo bar1-2.5; }
+bar2() {
+    from mypack-2.5::xxx import bar1
+    echo "$FUNCNAME calling bar1: $(bar1)";
+}
+EOF
+    mkdir -p mypack/2.6
+    cat <<"EOF" > mypack/2.6/libxxx.sh
+echo loading libxxx.sh
+bar1() { echo bar1-2.6; }
+bar2() {
+    from mypack-2.6::xxx import bar1
+    echo "$FUNCNAME calling bar1: $(bar1)";
+}
+bar3() {
+    from mypack-2.6::xxx import bar1  ## dep to bar1 explicited
+    echo "$FUNCNAME calling bar1: $(bar1)";
+}
+EOF
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+from mypack-2.5::xxx import bar2   ## this will load in memory defs of mypack-2.6
+bar2  ## imports bar1 in version 2.5
+(
+  from mypack-2.6::xxx import bar2 bar3
+  bar3  ## import correct bar1 in version 2.6
+  bar2  ## imports bar1 but bar1 is already in version 2.6
+  bar3  ## this call gets same output from previous
+)
+EOF
+    chmod +x foo
+}
+try "DEBUG=true ./foo" "'from' don't breaks repetability of protected functions."
+is err ""
+noerror
+is out "bar2 calling bar1: bar1-2.5
+bar3 calling bar1: bar1-2.6
+bar2 calling bar1: bar1-2.6
+bar3 calling bar1: bar1-2.6
+"
+
+
+##
+##
+##
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    mkdir -p mypack/2.5
+    cat <<"EOF" > mypack/2.5/libxxx.sh
+echo loading libxxx.sh
+bar1() { echo bar1-2.5; }
+bar2() {
+    echo 'bar2: from mypack-2.5::xxx import bar1'
+    from mypack-2.5::xxx import bar1
+    bar2() {
+        echo "$FUNCNAME calling bar1: $(bar1)";
+    }
+    bar2
+    _protected_fn+="bar1: bar2"
+}
+EOF
+    mkdir -p mypack/2.6
+    cat <<"EOF" > mypack/2.6/libxxx.sh
+echo loading libxxx.sh
+bar1() { echo bar1-2.6; }
+bar3() {
+    echo 'bar3: from mypack-2.6::xxx import bar1'
+    from mypack-2.6::xxx import bar1  ## dep to bar1 explicited
+    bar3() {
+        echo "$FUNCNAME calling bar1: $(bar1)";
+    }
+    bar3
+}
+EOF
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+from mypack-2.5::xxx import bar2   ## this will load in memory defs of mypack-2.5
+bar2    ## call v2.5 version of bar2... which imports version of bar1 (v2.5), and remove 'from' call
+(       ## subshell won't allow to bypass verification
+  from mypack-2.6::xxx import bar3
+  bar3  ## import correct bar1 in version 2.6, try to override bar1 <-- FAIL
+  bar2  ## would call v2.6 version of bar1... and fail to give same result
+)
+EOF
+    chmod +x foo
+}
+try "DEBUG=true ./foo" "'from' won't allow to break repetability of one-time protected functions."
+is err "\
+bar3: error: you can't override 'bar1' as it is used by: bar2.
+"
+is errlvl 1
+is out "\
+bar2: from mypack-2.5::xxx import bar1
+bar2 calling bar1: bar1-2.5
+bar3: from mypack-2.6::xxx import bar1
+"
+
+
+
 

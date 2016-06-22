@@ -1,6 +1,6 @@
 # -*- mode: shell-script -*-
 
-prefix_cmd=""
+prefix_cmd='cd "$test_tmpdir/test1";'
 export _shlib_loaded=
 export _shlib_included=
 unset -f include

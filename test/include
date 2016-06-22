@@ -1,6 +1,6 @@
 # -*- mode: shell-script -*-
 
-prefix_cmd=""
+prefix_cmd='cd "$test_tmpdir/test1";'
 export _shlib_loaded=
 export _shlib_included=
 
@@ -10,7 +10,7 @@ export SHLIB_PATH=$test_tmpdir/test1
 
 
 ##
-## include/autoload exporting function automatically
+## 
 ##
 
 setup() {
@@ -48,7 +48,7 @@ EOF
     chmod +x foo foo2
 }
 
-try "./foo"
+try "./foo" "include/autoload exporting function automatically"
 noerror
 is out "loading
 declare -fx bar0
@@ -61,7 +61,7 @@ declare -fx bar5
 
 
 ##
-## include and autoload non importing code twice
+## 
 ##
 
 setup() {
@@ -95,7 +95,7 @@ include xxx
 EOF
     chmod +x foo foo2
 }
-try "./foo"
+try "./foo" "include and autoload non importing code twice"
 noerror
 is out "loading autoload/foo.sh
 loading libxxx.sh
@@ -105,7 +105,7 @@ declare -fx bar2
 
 
 ##
-## include error message
+## 
 ##
 
 setup() {
@@ -119,11 +119,14 @@ EOF
     chmod +x foo
 }
 
-try "./foo"
+try "./foo" "include error message"
 is errlvl 1
-is err reg "^foo: error: file '/tmp/tmp.*/test1/libxxx.sh' cannot be open for read.$"
+is err reg "^include: error: file '/tmp/tmp.*/test1/libxxx.sh' cannot be open for read.$"
 is out ""
 
+##
+## 
+##
 
 setup() {
     cd "$test_tmpdir"; mkdir test1;
@@ -139,9 +142,9 @@ EOF
     chmod +x foo
 }
 
-try "./foo"
+try "./foo"  "include error message 2"
 is errlvl 1
-is err reg "^x: error: file '/tmp/tmp.*/test1/libxxx.sh' cannot be open for read.$"
+is err reg "^include: error: file '/tmp/tmp.*/test1/libxxx.sh' cannot be open for read.$"
 is out ""
 
 
@@ -161,9 +164,9 @@ EOF
     chmod +x foo
 }
 
-try "./foo"
+try "./foo"  "include error message 3"
 is errlvl 1
-is err reg "x: error: file '/tmp/tmp.*/test1/libxxx.sh' cannot be open for read.$"
+is err reg "include: error: file '/tmp/tmp.*/test1/libxxx.sh' cannot be open for read.$"
 is out ""
 
 
@@ -180,7 +183,8 @@ EOF
     chmod +x foo
 }
 
-try "./foo"
+try "./foo"  "include error message 4"
 is errlvl 1
-is err reg "^foo: error: file '/tmp/tmp.*/test1/libxxx.sh' cannot be open for read.$"
+is err reg "^include: error: file '/tmp/tmp.*/test1/libxxx.sh' cannot be open for read.$"
 is out ""
+
