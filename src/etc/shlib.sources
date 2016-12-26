@@ -165,8 +165,12 @@ export -f _shlib_load
 
 
 include() {
+    local label
     for label in "$@"; do
         _shlib_load "$SHLIB_PATH/$SHLIB_PREFIX$label$SHLIB_SUFFIX" || exit 1
+        if fn.exists "$label:init"; then
+            "$label:init"
+        fi
     done
 }
 export -f include

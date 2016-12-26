@@ -1,0 +1,65 @@
+# -*- mode: shell-script -*-
+
+prefix_cmd='cd "$test_tmpdir/test1";'
+export _shlib_loaded=
+export _shlib_included=
+
+export SHLIB_PATH=$test_tmpdir/test1
+
+teardown() { cd "$test_tmpdir"; rm -rf test1; }
+
+
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > libxxx.sh
+echo loading libxxx.sh
+xxx:init() { echo xxx INITED; }
+EOF
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+include xxx
+
+EOF
+    chmod +x foo
+}
+try "./foo" "function named PKG:init gets called automatically"
+noerror
+is out "loading libxxx.sh
+xxx INITED
+"
+
+##
+## Depth multi-includes have all init functione correctly called
+##
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > libxxx.sh
+echo loading libxxx.sh
+xxx:init() { echo xxx INITED; }
+EOF
+    cat <<EOF > libyyy.sh
+echo loading libyyy.sh
+include xxx
+EOF
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+include xxx
+include yyy
+
+EOF
+    chmod +x foo
+}
+try "./foo" "Depth multi-includes have all init functione correctly called"
+noerror
+is out "loading libxxx.sh
+xxx INITED
+loading libyyy.sh
+xxx INITED
+"
+
