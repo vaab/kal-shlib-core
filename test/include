@@ -188,3 +188,36 @@ is errlvl 1
 is err reg "^include: error: file '/tmp/tmp.*/test1/libxxx.sh' cannot be open for read.$"
 is out ""
 
+
+##
+## Recursive includes have all functione correctly exported
+##
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > libxxx.sh
+echo loading libxxx.sh
+include yyy
+bar_xxx1() { echo bar; }
+EOF
+    cat <<EOF > libyyy.sh
+echo loading libyyy.sh
+bar_yyy1() { echo bar; }
+EOF
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+include xxx
+
+declare -F | egrep 'bar_(xxx|yyy)1\$'
+EOF
+    chmod +x foo
+}
+try "./foo" "recursive include having both their function exported"
+noerror
+is out "loading libxxx.sh
+loading libyyy.sh
+declare -fx bar_xxx1
+declare -fx bar_yyy1
+"
