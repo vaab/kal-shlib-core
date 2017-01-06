@@ -11,12 +11,12 @@ export SHLIB_SUFFIX=${SHLIB_SUFFIX:-".sh"}
 export SHLIB_AUTOLOAD_PATH=$SHLIB_PATH/autoload
 
 
-export NL=$'\n'
-export _shlib_included=${_shlib_included:-$NL}
-export _pkg_content=${_pkg_content:-$NL}
-_fn_imported=${_fn_imported:-$NL}
+export _shlib_NL=$'\n'
+export _shlib_included=${_shlib_included:-$_shlib_NL}
+export _pkg_content=${_pkg_content:-$_shlib_NL}
+_fn_imported=${_fn_imported:-$_shlib_NL}
 _shell_id="$BASHPID"
-export _protected_fn=${_protected_fn:-$NL}
+export _protected_fn=${_protected_fn:-$_shlib_NL}
 
 
 _get_caller() {
@@ -92,7 +92,7 @@ _check_no_override() {
         _shell_id="$BASHPID"
         _fn_imported=""
     fi
-    if [[ $_fn_imported == *"$NL$fun$NL"* ]]; then
+    if [[ $_fn_imported == *"$_shlib_NL$fun$_shlib_NL"* ]]; then
         if fn.exists "$fun"; then
             if [ "SHLIB_$(fn.hash "$fun")" != "$hashed_fn_name" ]; then
                 echo "${FUNCNAME[2]}: error: you can't override '$fun' that was previouly imported." >&2
@@ -101,7 +101,7 @@ _check_no_override() {
             fi
         fi
     fi
-    if [[ $_protected_fn == *"$NL$fun: "* ]]; then
+    if [[ $_protected_fn == *"$_shlib_NL$fun: "* ]]; then
         if fn.exists "$fun"; then
             filtered_fns=()
             for dependee in $(echo "$_protected_fn" | egrep "^$fun: " | cut -f 2- -d ":"); do
@@ -121,7 +121,7 @@ export -f _check_no_override
 _shlib_load() {
     local filename="$1" pkgname="$2" fun hash fn_dst_name fn_list contents fun_names
     shift; shift
-    [[ $_shlib_included == *"$NL$filename$NL"* ]] && return 0
+    [[ $_shlib_included == *"$_shlib_NL$filename$_shlib_NL"* ]] && return 0
     if ! [ -f "$filename" -a -r "$filename" ]; then
         echo "$(_get_caller 0): error: file '$filename' cannot be open for read." >&2
         return 1
@@ -133,7 +133,7 @@ _shlib_load() {
             return 1
         }
         fun_names=$(echo "$_pkg_fns" | sed -r 's/\|.*$//g')
-        _pkg_content+="$pkgname; $_pkg_fns$NL"  ## storing all functions of package
+        _pkg_content+="$pkgname; $_pkg_fns$_shlib_NL"  ## storing all functions of package
         for fun in "$@"; do
             hashed_fn_name=$(_lookup_fun "$fun" $_pkg_fns) || {
                 echo "$(_get_caller): error: no function '$fun' found in baked '$filename'." >&2
@@ -142,8 +142,8 @@ _shlib_load() {
             }
             _check_no_override "$fun" "$hashed_fn_name" || return 1
             fn.cp "$hashed_fn_name" "$fun"
-            to_export_filtered+=$fun$NL
-            _fn_imported+=$fun$NL
+            to_export_filtered+=$fun$_shlib_NL
+            _fn_imported+=$fun$_shlib_NL
         done
     else
         fun_names=$(echo "$contents" | _get_fn_names)
@@ -151,15 +151,15 @@ _shlib_load() {
             echo "$(_get_caller): error: sourcing content of '$filename' failed." >&2
             return 1
         }
-        to_export_filtered=$NL
+        to_export_filtered=$_shlib_NL
         for fun in $fun_names; do
-            to_export_filtered+=$fun$NL
+            to_export_filtered+=$fun$_shlib_NL
         done
     fi
-    if [ "$to_export_filtered" != "$NL" ]; then
+    if [ "$to_export_filtered" != "$_shlib_NL" ]; then
         export -f $to_export_filtered
     fi
-    _shlib_included+=$filename$NL
+    _shlib_included+=$filename$_shlib_NL
 }
 export -f _shlib_load
 
@@ -223,7 +223,7 @@ from() {
         }
     done
 
-    if [[ $_pkg_content == *"$NL$pkg; "* ]]; then
+    if [[ $_pkg_content == *"$_shlib_NL$pkg; "* ]]; then
         ## already loaded:
         while read line; do  ## not sure that we get the correct package
             cur_pkg=${line%;*}
@@ -239,7 +239,7 @@ from() {
                 if ! fn.exists "$fun" || [ "$fun::$(fn.hash "$fun")" != "$candidate" ]; then
                     fn.cp "$candidate" "$fun"
                     export -f "$fun"
-                    _fn_imported+=$fun$NL
+                    _fn_imported+=$fun$_shlib_NL
                 fi
             done
         done < <(echo "$_pkg_content" | grep "^$pkg; ")
