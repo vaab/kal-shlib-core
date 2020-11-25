@@ -22,9 +22,9 @@ export _protected_fn=${_protected_fn:-$_shlib_NL}
 _get_caller() {
     local deep="${1:0}" fn sourced
     read _ fn sourced < <(caller $((deep + 1)))
-    [ "$fn" == "source" -o "$fn" == "main" ] && fn=$(basename "$sourced")
+    [ "$fn" == "source" -o "$fn" == "main" ] && fn=${sourced##*/}
     [ "$fn" ] || fn="${FUNCNAME[$((deep + 2))]}"
-    [ "$fn" ] || fn=$(basename "$_shlib_caller")
+    [ "$fn" ] || fn=${_shlib_caller##*/}
     echo "$fn"
 }
 export -f _get_caller
