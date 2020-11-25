@@ -1,19 +1,15 @@
 #!/usr/bin/env bash
 
 source="$1"
-if [ "$source" ]; then
-    exec /bin/bash -c "
-
-if [ -e /etc/shlib ]; then
-     . /etc/shlib || {
-         echo \"Unsatisfied dependency. Please install 'kal-shlib-core'.\" >&2
-         exit 1
-     }
-fi
-
-. \"$source\"
-
-" "$@"
-else
+if ! [ "$source" ]; then
     echo "You should use bash-shlib only in a shebang." >&2; exit 1
 fi
+
+load-shlib() {
+    . /etc/shlib || { echo "Unsatisfied dependency. Please install 'kal-shlib-core'." >&2 ; exit 1; }
+}
+export -f load-shlib
+
+exec -a "$*  ##" bash -c "load-shlib \"\$@\"
+. \"$source\"
+" "$@"

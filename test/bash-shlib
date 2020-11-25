@@ -77,15 +77,51 @@ setup() {
     cat <<EOF > foo
 #!$base/src/bin/bash-shlib
 
-echo "\$0"
+i=0
+for a in "\$0" "\$@"; do
+    echo "\\\$\$((i++)):"
+    echo "\$a" | sed -r 's/^/  | /g'
+done
 EOF
     chmod +x foo
 }
 
 
 noerror
-try "./foo"
+try "./foo a 'b c' d" 'check $0'
 noerror
-is out './foo
-'
+is out "\
+\$0:
+  | ./foo
+\$1:
+  | a
+\$2:
+  | b c
+\$3:
+  | d
+"
 
+
+##
+## ps of myself doesn't show bash-shlib
+##
+
+
+setup() {
+    cd "$test_tmpdir"; mkdir test1;
+    cd test1
+    cat <<EOF > foo
+#!$base/src/bin/bash-shlib
+
+ps -o command= --pid=\$\$
+EOF
+    chmod +x foo
+}
+
+
+noerror
+try "./foo a 'b c' d" 'process name in process list'
+noerror
+## Optimal would be:
+#is out "./foo a b c d" RTRIM
+is out reg "^\./foo a b c d  ##"
