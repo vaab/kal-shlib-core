@@ -16,7 +16,7 @@ AM_INIT_AUTOMAKE
 AC_PROG_INSTALL
 AC_PATH_PROGS(BASH, bash)
 
-if test -z "${BASH}"; then 
+if test -z "${BASH}"; then
    echo "You need BASH to run this script... "
    exit 1
 fi
